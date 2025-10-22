@@ -13,16 +13,16 @@ public class EmailListServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request,
-            HttpServletResponse response)
+                         HttpServletResponse response)
             throws ServletException, IOException {
 
-        // Lấy action (tùy form có gửi không)
+        // Lấy action (mặc định là join)
         String action = request.getParameter("action");
         if (action == null) {
-            action = "join";  // mặc định
+            action = "join";
         }
 
-        String url = "/index.jsp"; // trang mặc định
+        String url = "/index.jsp";
 
         if (action.equals("join")) {
             url = "/index.jsp";
@@ -33,45 +33,42 @@ public class EmailListServlet extends HttpServlet {
             String lastName = request.getParameter("lastName");
             String email = request.getParameter("email");
 
-            // Lưu thông tin vào request để hiển thị lại nếu cần
+            // Gửi mail chào mừng
+            String to = email;
+            String from = "hnam19567@gmail.com"; // ← địa chỉ đã verify trong SendGrid
+            String subject = "Welcome to our email list";
+            String body = "Dear " + firstName + ",\n\n"
+                    + "Thanks for joining our email list. We'll make sure to send "
+                    + "you announcements about new products and promotions.\n"
+                    + "Have a great day and thanks again!\n";
+            boolean isBodyHTML = false;
+
+            try {
+                // Gửi mail qua SendGrid API
+                MailUtilGmail.sendMail(to, from, subject, body, isBodyHTML);
+            } catch (Exception e) {
+                String errorMessage =
+                        "ERROR: Unable to send email. " +
+                        "Check server logs for details.<br>" +
+                        "ERROR MESSAGE: " + e.getMessage();
+                request.setAttribute("errorMessage", errorMessage);
+                this.log(
+                        "Unable to send email.\n" +
+                        "TO: " + email + "\n" +
+                        "FROM: " + from + "\n" +
+                        "SUBJECT: " + subject + "\n" +
+                        "BODY:\n" + body + "\n", e);
+            }
+
+            // Lưu lại thông tin để hiện ở thanks.jsp
             request.setAttribute("firstName", firstName);
             request.setAttribute("lastName", lastName);
             request.setAttribute("email", email);
 
-            // --- Gửi mail bằng Gmail ---
-            String to = email;
-            String from = "hnam19567@gmail.com"; // <-- thay bằng Gmail của bạn
-            String subject = "Welcome to our email list";
-            String body = "Dear " + firstName + ",\n\n" +
-                "Thanks for joining our email list. We'll make sure to send " +
-                "you announcements about new products and promotions.\n" +
-                "Have a great day and thanks again!\n\n" +
-                "Kelly Slivkoff\n" +
-                "Mike Murach & Associates";
-            boolean isBodyHTML = false;
-
-            try {
-                // Gửi email qua Gmail (MailUtilGmail đã chứa logic SMTP)
-                MailUtilGmail.sendMail(to, from, subject, body, isBodyHTML);
-            } catch (MessagingException e) {
-                String errorMessage = 
-                    "ERROR: Unable to send email. " +
-                    "Check server logs for details.<br>" +
-                    "ERROR MESSAGE: " + e.getMessage();
-                request.setAttribute("errorMessage", errorMessage);
-                this.log(
-                    "Unable to send email.\n" +
-                    "TO: " + email + "\n" +
-                    "FROM: " + from + "\n" +
-                    "SUBJECT: " + subject + "\n" +
-                    "BODY:\n" + body + "\n");
-            }
-
-            // Sau khi gửi xong → đến trang cảm ơn
+            // Chuyển sang trang cảm ơn
             url = "/thanks.jsp";
         }
 
-        // Chuyển hướng đến trang kết quả
         getServletContext()
                 .getRequestDispatcher(url)
                 .forward(request, response);

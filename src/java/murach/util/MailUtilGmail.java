@@ -1,50 +1,56 @@
 package murach.util;
 
-import java.util.Properties;
-import javax.mail.*;
-import javax.mail.internet.*;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
 
 public class MailUtilGmail {
 
-    public static void sendMail(String to, String from,
-            String subject, String body, boolean bodyIsHTML)
-            throws MessagingException {
+    public static void sendMail(String to, String from, String subject, String body, boolean bodyIsHTML)
+            throws Exception {
 
-        // 1. Cấu hình SMTP Relay
-        Properties props = new Properties();
-        props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.starttls.enable", "true");
-        props.put("mail.smtp.host", "smtp.sendgrid.net");
-        props.put("mail.smtp.port", "587"); 
+        String apiKey = System.getenv("API_KEY");
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IllegalStateException("Missing SENDGRID_API_KEY environment variable");
+        }
+        // Build JSON payload (simple version)
+        String contentType = bodyIsHTML ? "text/html" : "text/plain";
+        String json = "{"
+                + "\"personalizations\":[{\"to\":[{\"email\":\"" + escapeJson(to) + "\"}]}],"
+                + "\"from\":{\"email\":\"" + escapeJson(from) + "\"},"
+                + "\"subject\":\"" + escapeJson(subject) + "\","
+                + "\"content\":[{\"type\":\"" + contentType + "\",\"value\":\"" + escapeJson(body) + "\"}]"
+                + "}";
 
-        // 2. Thông tin đăng nhập SendGrid
-        final String username = "apikey"; // cố định, không đổi
-        final String password = System.getenv("API_KEY"); 
+        URL url = new URL("https://api.sendgrid.com/v3/mail/send");
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setDoOutput(true);
 
-        // 3. Tạo session
-        Session session = Session.getInstance(props,
-                new javax.mail.Authenticator() {
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(username, password);
-                    }
-                });
-
-        session.setDebug(true);
-
-        // 4. Tạo message
-        Message message = new MimeMessage(session);
-        message.setFrom(new InternetAddress(from));
-        message.setRecipient(Message.RecipientType.TO, new InternetAddress(to));
-        message.setSubject(subject);
-
-        if (bodyIsHTML) {
-            message.setContent(body, "text/html; charset=utf-8");
-        } else {
-            message.setText(body);
+        byte[] out = json.getBytes(StandardCharsets.UTF_8);
+        conn.setFixedLengthStreamingMode(out.length);
+        conn.connect();
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(out);
         }
 
-        // 5. Gửi mail
-        Transport.send(message);
-        System.out.println("✅ Email sent successfully to " + to);
+        int status = conn.getResponseCode();
+        if (status != 202) { // 202 = accepted
+            throw new RuntimeException("SendGrid API returned HTTP " + status);
+        }
+        // success
+    }
+
+    // minimal JSON string escaper (for our simple payload)
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
     }
 }

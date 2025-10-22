@@ -19,7 +19,7 @@ public class MailUtilGmail {
 
         // 2. Thông tin đăng nhập SendGrid
         final String username = "apikey"; // cố định, không đổi
-        final String password = "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"; 
+        final String password = System.getenv("API_KEY"); 
 
         // 3. Tạo session
         Session session = Session.getInstance(props,
